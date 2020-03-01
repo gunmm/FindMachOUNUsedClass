@@ -25,6 +25,8 @@ output = `#{command}`
 
 class_list_identifier = 'Contents of (__DATA,__objc_classlist) section'
 class_refs_identifier = 'Contents of (__DATA,__objc_classrefs) section'
+class_super_refs_identifier = 'Contents of (__DATA,__objc_superrefs) section'
+
 
 unless output.include? class_list_identifier
     raise Rainbow('only support iphone target, please use iphone build...').red
@@ -56,10 +58,13 @@ vmaddress_to_class_name_real_patten = /00(#{name_patten_string}) 0x(#{name_patte
 
 class_list = []
 class_refs = []
+class_super_refs = []
+
 used_vmaddress_to_class_name_hash = {}
 
 can_add_to_list = false
 can_add_to_refs = false
+can_add_to_super_refs = false
 
 output.each_line do |line|
     if patten.match(line)
@@ -69,6 +74,12 @@ output.each_line do |line|
             elsif line.include? class_refs_identifier
             can_add_to_list = false
             can_add_to_refs = true
+            can_add_to_super_refs = false
+            next
+            elsif line.include? class_super_refs_identifier
+            can_add_to_list = false
+            can_add_to_refs = false
+            can_add_to_super_refs = true
             else
             break
         end
@@ -86,10 +97,19 @@ output.each_line do |line|
                 end
             end
         end
-        
-        
+    end
+    if can_add_to_super_refs && line
+        if vmaddress_to_class_name_patten.match(line)
+            else
+            vmaddress_to_class_name_real_patten.match(line) do |m|
+                unless used_vmaddress_to_class_name_hash[m[2]]
+                    used_vmaddress_to_class_name_hash[m[2]] = m[2]
+                end
+            end
+        end
     end
 end
+
 
 # remove cocoapods class
 podsd_dummy = 'PodsDummy'
@@ -112,11 +132,11 @@ class_list.each do |line|
             vmaddress_to_class_name_hash[keyString] = vmaddress_to_class_name_hash[keyString] + '' + line
             needName = false
             keyString = ''
-#            puts Rainbow(line).green
         end
     end
     
 end
+
 
 result = vmaddress_to_class_name_hash
 vmaddress_to_class_name_hash.each do |key, value|
