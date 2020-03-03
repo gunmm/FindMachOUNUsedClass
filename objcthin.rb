@@ -4,6 +4,12 @@ require 'rainbow'
 require 'pathname'
 require 'singleton'
 
+class Model
+  attr :name, true
+  attr :address, true
+  attr :superAddress, true
+end
+
 puts Rainbow('begin:').green
 path = "/Users/minzhe/Desktop/JiemianNews"
 prefix = ''
@@ -19,7 +25,7 @@ if arch_output.include? 'arm64'
     arch = 'armv7'
 end
 
-command = "/usr/bin/otool -o #{path}"
+command = "/usr/bin/otool -arch #{arch}  -V -o #{path}"
 output = `#{command}`
 
 
@@ -50,11 +56,11 @@ end
 addressPatten = /00(#{name_patten_string}) 0x(#{name_patten_string})/
 namePatten = /                     name (#{name_patten_string}) (#{name_patten_string})/
 
+superClassPatten = /    superclass 0x(#{name_patten_string})/
 
 vmaddress_to_class_name_patten = /^(\d*\w*)\s(0x\d*\w*)\s_OBJC_CLASS_\$_(#{name_patten_string})/
 
 vmaddress_to_class_name_real_patten = /00(#{name_patten_string}) 0x(#{name_patten_string})/
-
 
 class_list = []
 class_refs = []
@@ -98,16 +104,16 @@ output.each_line do |line|
             end
         end
     end
-    if can_add_to_super_refs && line
-        if vmaddress_to_class_name_patten.match(line)
-            else
-            vmaddress_to_class_name_real_patten.match(line) do |m|
-                unless used_vmaddress_to_class_name_hash[m[2]]
-                    used_vmaddress_to_class_name_hash[m[2]] = m[2]
-                end
-            end
-        end
-    end
+#    if can_add_to_super_refs && line
+#        if vmaddress_to_class_name_patten.match(line)
+#            else
+#            vmaddress_to_class_name_real_patten.match(line) do |m|
+#                unless used_vmaddress_to_class_name_hash[m[2]]
+#                    used_vmaddress_to_class_name_hash[m[2]] = m[2]
+#                end
+#            end
+#        end
+#    end
 end
 
 
@@ -117,31 +123,78 @@ podsd_dummy = 'PodsDummy'
 vmaddress_to_class_name_hash = {}
 needName = false
 keyString = ''
+superAddressString = ''
 
 class_list.each do |line|
     next if line.include? podsd_dummy
     addressPatten.match(line) do |m|
-        vmaddress_to_class_name_hash[m[2]] = m[2]
+        model = Model.new
+        model.address = m[2]
+        vmaddress_to_class_name_hash[m[2]] = model
         keyString = m[2]
         needName = true
     end
     
-
-    if namePatten.match(line)
+    superClassPatten.match(line) do |m|
+        superAddressString = m[1]
+    end
+    
+    namePatten.match(line) do |m|
         if needName
-            vmaddress_to_class_name_hash[keyString] = vmaddress_to_class_name_hash[keyString] + '' + line
+            model = vmaddress_to_class_name_hash[keyString]
+            model.superAddress = superAddressString
+            model.name = m[2]
+            vmaddress_to_class_name_hash[keyString] = model
             needName = false
             keyString = ''
+            superAddressString = ''
         end
     end
     
 end
 
-
 result = vmaddress_to_class_name_hash
-vmaddress_to_class_name_hash.each do |key, value|
-    if used_vmaddress_to_class_name_hash.keys.include?(key)
+
+used_vmaddress_to_class_name_hash.each do |key, value|
+    model = result[key]
+    if model != nil
+        if model.superAddress.include? "_OBJC_CLASS_"
+            result.delete(key)
+            next
+        end
+        supermodel = vmaddress_to_class_name_hash[model.superAddress]
+        if supermodel != nil
+            result.delete(model.superAddress)
+            result.delete(key)
+            next
+        end
+
+        if model.name.start_with?('_')
+            result.delete(key)
+            next
+        end
+    end
+    result.delete(key)
+end
+
+result.each do |key, value|
+    if value.name != nil
+        if value.name.start_with?('_')
+            result.delete(key)
+        end
+        else
         result.delete(key)
     end
 end
-puts result.values
+
+name_list = []
+
+puts "total： "
+puts result.values.count
+result.values.each do |value|
+    name_list << value.name
+end
+
+puts name_list.sort
+
+

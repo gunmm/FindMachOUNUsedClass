@@ -131,7 +131,7 @@ imp.each do |sel,class_and_sels|
     unused_sel << class_and_sels
   end
 end
-
+puts unused_sel.count
 puts unused_sel
 
 
