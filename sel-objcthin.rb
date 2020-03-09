@@ -80,6 +80,13 @@ namePatten = /      name (#{name_patten_string}) (#{name_patten_string})/
 patten = /       imp (#{name_patten_string})/
 classNamePatten = /                     name (#{name_patten_string}) (#{name_patten_string})/
 
+ivarsBeginPatten = /                    ivars 0x(#{name_patten_string})/
+ivarsEndPatten = /           weakIvarLayout 0x(#{name_patten_string})/
+ivarNamePatten = /     name 0x(#{name_patten_string}) _(#{name_patten_string})/
+
+class_list_identifier = 'Contents of (__DATA,__objc_classlist) section'
+sectionPatten = /Contents of \(.*\) section/
+
 
 output = `/usr/bin/otool -oV #{path}`
 
@@ -88,7 +95,28 @@ n = 0
 lastStr = ''
 classStr = ''
 
+can_add_to_ivars = false
+can_add_to_list = false
+
+ivars = []
+class_list = []
+
 output.each_line do |line|
+    if sectionPatten.match(line)
+        if line.include? class_list_identifier
+            can_add_to_list = true
+            next
+            else
+            can_add_to_list = false
+            break
+        end
+    end
+    if can_add_to_list
+        class_list << line
+    end
+end
+
+class_list.each do |line|
     n = n + 1
     namePatten.match(line) do |m|
         lastStr = m[2]
@@ -109,9 +137,21 @@ output.each_line do |line|
           imp[lastStr] = (classStr + " " + lastStr)
       end
     end
+    
+    ivarsBeginPatten.match(line) do |m|
+        can_add_to_ivars = true
+    end
+    
+    if can_add_to_ivars
+        ivarNamePatten.match(line) do |m|
+            ivars << m[2]
+        end
+    end
+    
+    ivarsEndPatten.match(line) do |m|
+        can_add_to_ivars = false
+    end
 end
-
-
 
 patten = /__TEXT:__objc_methname:(.+)/
 output = `/usr/bin/otool -v -s __DATA __objc_selrefs #{path}`
@@ -123,16 +163,22 @@ output.each_line do |line|
   end
 end
 
-
 unused_sel = []
+puts imp.values.count
+
+imp.each do |sel,class_and_sels|
+  if ivars.include?(sel)
+      imp.delete(sel)
+  end
+end
+
+puts imp.values.count
 
 imp.each do |sel,class_and_sels|
   unless sels.include?(sel)
     unused_sel << class_and_sels
   end
 end
+
 puts unused_sel.count
-puts unused_sel
-
-
-
+puts unused_sel.sort
