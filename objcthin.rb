@@ -11,7 +11,7 @@ class Model
 end
 
 puts Rainbow('begin:').green
-path = "/Users/minzhe/Desktop/JiemianNews"
+path = "/Users/minzhe/Desktop/Meipai"
 prefix = ''
 arch_command = "lipo -info #{path}"
 arch_output = `#{arch_command}`
@@ -54,7 +54,7 @@ unless prefix.empty?
 end
 
 addressPatten = /00(#{name_patten_string}) 0x(#{name_patten_string})/
-namePatten = /                     name (#{name_patten_string}) (#{name_patten_string})/
+namePatten = /        name           0x(#{name_patten_string}) (#{name_patten_string})/
 
 superClassPatten = /    superclass 0x(#{name_patten_string})/
 
@@ -158,9 +158,11 @@ result = vmaddress_to_class_name_hash
 used_vmaddress_to_class_name_hash.each do |key, value|
     model = result[key]
     if model != nil
-        if model.superAddress.include? "_OBJC_CLASS_"
-            result.delete(key)
-            next
+        if model.superAddress != nil
+            if model.superAddress.include? "_OBJC_CLASS_"
+                result.delete(key)
+                next
+            end
         end
         supermodel = vmaddress_to_class_name_hash[model.superAddress]
         if supermodel != nil
@@ -168,10 +170,12 @@ used_vmaddress_to_class_name_hash.each do |key, value|
             result.delete(key)
             next
         end
-
-        if model.name.start_with?('_')
-            result.delete(key)
-            next
+        
+        if model.name != nil
+            if model.name.start_with?('_')
+                result.delete(key)
+                next
+            end
         end
     end
     result.delete(key)
